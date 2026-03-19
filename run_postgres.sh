@@ -5,7 +5,11 @@ DB_PASS=$3
 DB_NAME=$4
 SQL_FILE=$5
 
-set -uo pipefail
+# STRICT MODE: 
+# -e: Exit immediately if a command fails
+# -u: Treat unset variables as an error
+# -o pipefail: If psql fails but the pipe to 'tee' succeeds, still count it as a failure
+set -euo pipefail
 
 LOG_DIR="/home/ubuntu/var/work/logs"
 mkdir -p "$LOG_DIR"

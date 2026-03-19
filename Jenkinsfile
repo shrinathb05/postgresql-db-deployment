@@ -5,7 +5,7 @@ pipeline {
         string(name: 'TAG_NAME', defaultValue: 'v0.1', description: 'Git tag to deploy')
 
         choice(
-            name: 'BD_HOST',
+            name: 'DB_HOST',
             choices: ['98.89.45.210', '10.23.434.554'],
             description: 'Select Database Server'
         )
@@ -51,14 +51,22 @@ pipeline {
         
         stage('Backup') {
             steps {
-                withCredentials([gitUsernamePassword(
-                    credentialsId: 'postgres_creds', 
-                    gitToolName: 'Default')
-                    
-                ]) {
-                    // Execute Backup script
-                    sh "bash run_postgres.sh ${params.DB_HOST} \$DB_USER \$DB_PASS ${params.DB_NAME} ${params.BACKUP_SCRIPT}"
-                } 
+                dir("${WORK_DIR}") {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'postgres-creds', // Make sure this ID exists in Jenkins Credentials
+                        usernameVariable: 'DB_USER', 
+                        passwordVariable: 'DB_PASS'
+                    )]) {
+                        script {
+                            // Validation Check for the DB_HOST
+                            if(params.DB_HOST == null || params.DB_HOST == "" ) {
+                                error "DB_HOST is null! Please select a Database Server in the parameters."
+                            }
+                            echo "====== STARTING POSTGRES BACKUP ======"
+                            sh "bash run_postgres.sh ${params.DB_HOST} \$DB_USER \$DB_PASS ${params.DB_NAME} ${params.BACKUP_SCRIPT}"
+                        }
+                    }
+                }  
             }
         }
     }
