@@ -28,12 +28,13 @@
     - 4. Restart Postgres
         sudo systemctl restart postgresql
 
+
 # Step 2: Create the Database & User
     Log into the Postgres prompt to set up your credentials.
     sudo -u postgres psql
 
     -- Create the user
-    CREATE USER release WITH PASSWORD 'shrinath';
+    CREATE USER user WITH PASSWORD 'password';
 
     -- Create the database
     CREATE DATABASE jenkins;
@@ -42,6 +43,26 @@
     GRANT ALL PRIVILEGES ON DATABASE jenkins TO release;
 
     -- Exit
+    \q
+
+    # Provide permissions
+
+    -- 1. Grant usage and create permissions on the public schema to your user
+    GRANT USAGE, CREATE ON SCHEMA public TO release;
+
+    -- 2. Make the 'release' user the owner of the schema (optional but recommended for a deployment user)
+    ALTER SCHEMA public OWNER TO release;
+
+    -- 3. Ensure all future tables created by 'release' are manageable
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO release;
+
+    -- Grant the release user permission to create tables in the public schema
+    GRANT ALL ON SCHEMA public TO release;
+
+    -- Ensure the user owns the schema to avoid future permission issues
+    ALTER SCHEMA public OWNER TO release;
+
+    -- Exit psql
     \q
 
 # Step 3: Prepare the Jenkins Agent

@@ -6,20 +6,19 @@ DB_NAME=$4
 SQL_FILE=$5
 
 # STRICT MODE: 
-# -e: Exit immediately if a command fails
-# -u: Treat unset variables as an error
-# -o pipefail: If psql fails but the pipe to 'tee' succeeds, still count it as a failure
 set -euo pipefail
 
 LOG_DIR="/home/ubuntu/var/work/logs"
 mkdir -p "$LOG_DIR"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-LOG_FILE="${LOG_DIR}/pg_${SQL_FILE%.sql}_${TIMESTAMP}.log"
+# Handle cases where SQL_FILE might be empty to avoid naming errors
+LOG_FILE="${LOG_DIR}/pg_${SQL_FILE:-unknown}_${TIMESTAMP}.log"
 
-# --- The -f check you requested ---
+# --- REQUIRED FILE CHECK ---
+# Changed 'exit 0' to 'exit 1' because you want the stage to FAIL if the file is missing
 if [ ! -f "$SQL_FILE" ]; then
-    echo "NOTICE: File '$SQL_FILE' not found. Skipping execution." | tee -a "$LOG_FILE"
-    exit 0
+    echo "ERROR: SQL File '$SQL_FILE' not found in $(pwd)" | tee -a "$LOG_FILE"
+    exit 1
 fi
 
 echo "===== Starting Postgres Execution: $SQL_FILE =====" | tee -a "$LOG_FILE"
@@ -28,8 +27,9 @@ echo "Target: $DB_NAME @ $DB_HOST" | tee -a "$LOG_FILE"
 # Security: Export Password for psql
 export PGPASSWORD="$DB_PASS"
 
-# Run PSQL with --echo-all to see the code and results in logs
-psql --echo-all -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" --echo-all >> "$LOG_FILE" 2>&1
+# 1. Added -v ON_ERROR_STOP=1 so psql fails immediately on a bad query
+# 2. Removed the double --echo-all (you had it twice)
+psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" --echo-all >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 
 unset PGPASSWORD
