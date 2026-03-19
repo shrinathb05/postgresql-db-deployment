@@ -25,7 +25,7 @@ echo "Target: $DB_NAME @ $DB_HOST" | tee -a "$LOG_FILE"
 export PGPASSWORD="$DB_PASS"
 
 # Run PSQL with --echo-all to see the code and results in logs
-psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" --echo-all >> "$LOG_FILE" 2>&1
+psql --echo-all -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" --echo-all >> "$LOG_FILE" 2>&1
 EXIT_CODE=$?
 
 unset PGPASSWORD

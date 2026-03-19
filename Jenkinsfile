@@ -3,6 +3,24 @@ pipeline {
 
     parameters {
         string(name: 'TAG_NAME', defaultValue: 'v0.1', description: 'Git tag to deploy')
+
+        choice(
+            name: 'BD_HOST',
+            choices: ['98.89.45.210', '10.23.434.554'],
+            description: 'Select Database Server'
+        )
+
+        choice(
+            name: 'DB_NAME',
+            choices: ['jenkins', 'postgres'],
+            description: 'Select Database Name'
+        )
+        
+        text(
+            name: 'BACKUP_SCRIPT',
+            defaultValue: '',
+            description: 'e.g backup.sql or any file in .sql format'
+        )
     }
 
     environment {
@@ -29,6 +47,19 @@ pipeline {
                     ])
                 }
             }
-        }        
+        }
+        
+        stage('Backup') {
+            steps {
+                withCredentials([gitUsernamePassword(
+                    credentialsId: 'postgres_creds', 
+                    gitToolName: 'Default')
+                    
+                ]) {
+                    // Execute Backup script
+                    sh "bash run_postgres.sh ${params.DB_HOST} \$DB_USER \$DB_PASS ${params.DB_NAME} ${params.BACKUP_SCRIPT}"
+                } 
+            }
+        }
     }
 }
