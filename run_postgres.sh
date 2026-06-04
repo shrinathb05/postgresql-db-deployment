@@ -1,43 +1,180 @@
 #!/bin/bash
-DB_HOST=$1
-DB_USER=$2
-DB_PASS=$3
-DB_NAME=$4
-SQL_FILE=$5
+# ==============================================================================
+# Script Name:  run_postgres.sh
+# Description:  BFSI-Compliant Database Migration & Log Engine
+# Security:     Consumes credentials exclusively via Process Environment Memory
+# ==============================================================================
 
-# STRICT MODE: 
 set -euo pipefail
 
-LOG_DIR="/home/ubuntu/var/work/logs"
-mkdir -p "$LOG_DIR"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-# Handle cases where SQL_FILE might be empty to avoid naming errors
-LOG_FILE="${LOG_DIR}/pg_${SQL_FILE:-unknown}_${TIMESTAMP}.log"
+########################################
+# Validate Environment Variables
+########################################
+: "${DB_HOST:?DB_HOST not set}"
+: "${DB_USER:?DB_USER not set}"
+: "${DB_NAME:?DB_NAME not set}"
+: "${PGPASSWORD:?PGPASSWORD not set}"
+: "${ENVIRONMENT:?ENVIRONMENT not set}"
+: "${RELEASE_TAG:?RELEASE_TAG not set}"
 
-# --- REQUIRED FILE CHECK ---
-# Changed 'exit 0' to 'exit 1' because you want the stage to FAIL if the file is missing
-if [ ! -f "$SQL_FILE" ]; then
-    echo "ERROR: SQL File '$SQL_FILE' not found in $(pwd)" | tee -a "$LOG_FILE"
+########################################
+# Validate Input
+########################################
+SQL_FILE="${1:-}"
+
+if [[ -z "$SQL_FILE" ]]; then
+    echo "ERROR: Missing target SQL script argument." >&2
+    echo "Usage: $0 <migration_file.sql>" >&2
     exit 1
 fi
 
-echo "===== Starting Postgres Execution: $SQL_FILE =====" | tee -a "$LOG_FILE"
-echo "Target: $DB_NAME @ $DB_HOST" | tee -a "$LOG_FILE"
-
-# Security: Export Password for psql
-export PGPASSWORD="$DB_PASS"
-
-# 1. Added -v ON_ERROR_STOP=1 so psql fails immediately on a bad query
-# 2. Removed the double --echo-all (you had it twice)
-psql -v ON_ERROR_STOP=1 -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE" --echo-all >> "$LOG_FILE" 2>&1
-EXIT_CODE=$?
-
-unset PGPASSWORD
-
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "SUCCESS: $SQL_FILE executed perfectly." | tee -a "$LOG_FILE"
-    exit 0
-else
-    echo "ERROR: $SQL_FILE failed with exit code $EXIT_CODE." | tee -a "$LOG_FILE"
-    exit $EXIT_CODE
+if [[ ! -f "$SQL_FILE" ]]; then
+    echo "ERROR: SQL file does not exist: $SQL_FILE" >&2
+    exit 1
 fi
+
+if [[ "${SQL_FILE##*.}" != "sql" ]]; then
+    echo "ERROR: Only .sql files are allowed" >&2
+    exit 1
+fi
+
+########################################
+# Deployment Metadata
+########################################
+START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+START_EPOCH=$(date +%s)
+RUN_ID=$(date '+%Y%m%d_%H%M%S')
+
+LOG_DIR="/opt/db_release/logs/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+DEPLOYMENT_LOG="${LOG_DIR}/deployment.log"
+HTML_REPORT="${LOG_DIR}/release_report.html"
+
+# Primary Header Initialization
+echo "====================================" | tee "${DEPLOYMENT_LOG}"
+echo "Database Deployment Started" | tee -a "${DEPLOYMENT_LOG}"
+echo "Environment : ${ENVIRONMENT}" | tee -a "${DEPLOYMENT_LOG}"
+echo "Release Tag : ${RELEASE_TAG}" | tee -a "${DEPLOYMENT_LOG}"
+echo "Database    : ${DB_NAME}" | tee -a "${DEPLOYMENT_LOG}"
+echo "SQL File    : ${SQL_FILE}" | tee -a "${DEPLOYMENT_LOG}"
+echo "Start Time  : ${START_TIME}" | tee -a "${DEPLOYMENT_LOG}"
+echo "====================================" | tee -a "${DEPLOYMENT_LOG}"
+
+########################################
+# Execute SQL Safely
+########################################
+STATUS="SUCCESS"
+
+{
+    psql \
+      -h "${DB_HOST}" \
+      -U "${DB_USER}" \
+      -d "${DB_NAME}" \
+      -v ON_ERROR_STOP=1 \
+      -a \
+      -f "${SQL_FILE}"
+
+} >> "${DEPLOYMENT_LOG}" 2>&1 || STATUS="FAILED"
+
+########################################
+# Capture End Time
+########################################
+END_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+END_EPOCH=$(date +%s)
+DURATION=$((END_EPOCH - START_EPOCH))
+
+########################################
+# Generate HTML Report
+########################################
+cat > "${HTML_REPORT}" << EOF
+<html>
+<head>
+<title>Database Deployment Report</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 30px;
+}
+table {
+    border-collapse: collapse;
+    width: 600px;
+}
+td, th {
+    border: 1px solid #dddddd;
+    padding: 10px;
+    text-align: left;
+}
+th {
+    background-color: #f2f2f2;
+}
+.status-SUCCESS {
+    color: green;
+    font-weight: bold;
+}
+.status-FAILED {
+    color: red;
+    font-weight: bold;
+}
+</style>
+</head>
+<body>
+
+<h2>Database Deployment Report</h2>
+
+<table>
+<tr>
+<th>Property</th>
+<th>Value</th>
+</tr>
+<tr>
+<td>Environment</td>
+<td>${ENVIRONMENT}</td>
+</tr>
+<tr>
+<td>Release Tag</td>
+<td>${RELEASE_TAG}</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>${DB_NAME}</td>
+</tr>
+<tr>
+<td>Script</td>
+<td>$(basename "${SQL_FILE}")</td>
+</tr>
+<tr>
+<td>Status</td>
+<td><span class="status-${STATUS}">${STATUS}</span></td>
+</tr>
+<tr>
+<td>Start Time</td>
+<td>${START_TIME}</td>
+</tr>
+<tr>
+<td>End Time</td>
+<td>${END_TIME}</td>
+</tr>
+<tr>
+<td>Duration</td>
+<td>${DURATION} seconds</td>
+</tr>
+</table>
+
+</body>
+</html>
+EOF
+
+########################################
+# Return Proper Exit Code
+########################################
+echo ""
+echo "Deployment Status : ${STATUS}"
+echo "Log File          : ${DEPLOYMENT_LOG}"
+echo "HTML Report       : ${HTML_REPORT}"
+
+if [[ "${STATUS}" == "FAILED" ]]; then
+    exit 1
+fi
+
+exit 0
