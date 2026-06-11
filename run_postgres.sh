@@ -45,7 +45,7 @@ START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 START_EPOCH=$(date +%s)
 RUN_ID=$(date '+%Y%m%d_%H%M%S')
 
-LOG_DIR="/opt/db_release/logs/${RUN_ID}"
+LOG_DIR="/opt/logs/"
 mkdir -p "${LOG_DIR}"
 
 DEPLOYMENT_LOG="${LOG_DIR}/deployment.log"
