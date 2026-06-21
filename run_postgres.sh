@@ -45,7 +45,7 @@ START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 START_EPOCH=$(date +%s)
 RUN_ID=$(date '+%Y%m%d_%H%M%S')
 
-LOG_DIR="/var/tmp"
+LOG_DIR="reports"
 mkdir -p "${LOG_DIR}"
 
 # Distinct log file destinations
