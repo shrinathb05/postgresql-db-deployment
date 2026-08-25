@@ -4,7 +4,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'TAG_NAME', defaultValue: 'v1.0.0', description: 'Git Tag to checkout')
+        string(name: 'TAG_NAME', defaultValue: 'v2.0', description: 'Git Tag to checkout')
         string(name: 'DB_HOST', defaultValue: '10.41.222.183', description: 'Target PostgreSQL Host IP')
         string(name: 'DB_NAME', defaultValue: 'deploy_db', description: 'PostgreSQL Database Name')
         string(name: 'BACKUP_SCRIPT', defaultValue: '', description: 'Pre-patch backup or safety script (optional)')
@@ -12,7 +12,7 @@ pipeline {
     }
     
     environment {
-        GIT_REPO = "https://github.com/shrinathb05/db-deployment.git"
+        GIT_REPO = "https://github.com/shrinathb05/postgresql-db-deployment.git"
     }
     
     stages {
@@ -33,13 +33,13 @@ pipeline {
             }
         }
         
-        stage('Backup / Pre-Execution') {
+        stage('Backup') {
             when {
                 expression { params.BACKUP_SCRIPT?.trim() != '' && params.BACKUP_SCRIPT?.trim() != 'none' }
             }
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'postgres-creds',
+                    credentialsId: 'postgres_creds',
                     usernameVariable: 'DB_USER',
                     passwordVariable: 'DB_PASS'
                 )]) {
@@ -57,10 +57,10 @@ pipeline {
             }
         }
         
-        stage('Execute Patch(es)') {
+        stage('Execute') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'postgres-creds',
+                    credentialsId: 'postgres_creds',
                     usernameVariable: 'DB_USER',
                     passwordVariable: 'DB_PASS'
                 )]) {
